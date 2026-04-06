@@ -7,6 +7,8 @@
 // - Shared memory map struct layout
 // - [..]
 
+#include "platform.hpp"
+
 #define PLUGIN_REVID					12
 
 #define ETS2                            1
@@ -15,14 +17,14 @@
 
 #define ETS2_PLUGIN_LOGGING_ON				0
 #define ETS2_PLUGIN_LOGGING_SHAREDMEMORY	0
-#define ETS2_PLUGIN_FILENAME_PREFIX "C:\ets2telem_"
+#define ETS2_PLUGIN_FILENAME_PREFIX SCS_LOG_PATH_PREFIX
 
 #if ETS2_PLUGIN_LOGGING_ON == 1
 #define SDK_ENABLE_LOGGING
 #endif
 
 #include "scssdk.h"
-#define SCS_PLUGIN_MMF_NAME TEXT("Local\\SCSTelemetry")
+#define SCS_PLUGIN_MMF_NAME SCS_SHM_NAME
 #define SCS_PLUGIN_MMF_SIZE (32*1024)
 /**
  * \brief string size for all strings (most of them) the amount of fields in the shared memory field

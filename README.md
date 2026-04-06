@@ -13,13 +13,86 @@ fork of [nlhans](https://github.com/nlhans/ets2-sdk-plugin) work
 
 SCS has kindly released a SDK that allows developers and users to stream telemetry data from the game to any 3rd party applications. An example program was provided (and often used) which enabled streaming data by using text files stored on the users harddisk. This puts unnecessary stress on the users harddrive (not the mention the number of re-writes that would hurt SSDs), and moreover requires the user to manually configure the telemetry data source.
 
-This SDK plug-in transports the telemetry stream via a Memory Mapped File. This is a special Windows (file)stream which resides completely in RAM and can be read from multiple applications.
+This SDK plug-in transports the telemetry stream via a Memory Mapped File. This is a special file stream which resides completely in RAM and can be read from multiple applications. The plugin supports both Windows and Linux platforms.
 
 ## Installation
 
-Actually you need to build this branch yourself. I will add a release later. Stay tuned for more information.
+Pre-built binaries are not provided. You need to build the plugin yourself using the instructions below.
 
-Installation is easy inside Euro Truck Simulator 2. Place the acquired DLL inside bin/win_x64/plugins/ of your ETS2/ATS installation. It is possible the plugins directory doesn't exists yet (as with every default installation). In that case you need to create the plugins folder. Place the DLL inside the plugins folder.
+### Plugin Installation
+
+**Windows:** Place the compiled `scs-telemetry.dll` inside `bin/win_x64/plugins/` of your ETS2/ATS installation.
+
+**Linux:** Place the compiled `scs-telemetry.so` inside `bin/linux_x64/plugins/` of your ETS2/ATS installation.
+
+The plugins directory may not exist by default. In that case, create it manually.
+
+You will now notice that each time ETS2/ATS starts it prompts that the SDK has been activated. Unfortunately you have to press OK to this message every time, but it's a small price to pay for the added features that are possible via the SDK.
+
+## Building
+
+This project uses CMake for cross-platform building, supporting both Windows and Linux.
+
+### Prerequisites
+
+**Windows:**
+- Visual Studio 2019 or later
+- CMake 3.10 or later
+
+**Linux:**
+- GCC or Clang compiler
+- CMake 3.10 or later
+- pthread library
+
+**Debian/Ubuntu:**
+```bash
+sudo apt-get install build-essential cmake
+```
+
+**Fedora/RHEL:**
+```bash
+sudo dnf install cmake gcc-c++
+```
+
+### Build Instructions
+
+**Linux:**
+```bash
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc)
+```
+
+The compiled plugin will be at `build/bin/scs-telemetry.so`.
+
+**Windows (Visual Studio):**
+```bash
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
+```
+
+The compiled plugin will be at `build/bin/Release/scs-telemetry.dll`.
+
+**Windows (Command Line with MSBuild):**
+```bash
+cmake -B build -S . -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release -- /m
+```
+
+### Build Options
+
+- `BUILD_WITH_LOGGING=ON` - Enable logging support (default: OFF)
+```bash
+cmake -DBUILD_WITH_LOGGING=ON ..
+```
+
+### Shared Memory Naming
+
+The plugin uses different shared memory names depending on the platform:
+- **Windows:** `Local\SCSTelemetry`
+- **Linux:** `/SCSTelemetry`
+
+The C# client automatically detects the platform and uses the appropriate name.
 
 You will now notice that each time ETS2/ATS now starts it prompts the SDK has been activated. Unfortunately you have to press OK to this message every time, but it's a small price to pay for the added features that are possible via the SDK.
 
@@ -399,10 +472,13 @@ If you want to use javascript have a look here [Kniffen TruckSim-Telemetry](http
 
 ### Other
 
-For other languages you need to create/find a library that can open and read MemoryMapped files. The data storage format is binary and can be found in "scs-telemetry/inc/scs-telemetry-common.hpp". The shared memory map name is "Local\SCSTelemetry". I will add some more documentary in this header later.
+For other languages you need to create/find a library that can open and read MemoryMapped files. The data storage format is binary and can be found in "scs-telemetry/inc/scs-telemetry-common.hpp".
+
+The shared memory map name depends on the platform:
+- **Windows:** `Local\SCSTelemetry`
+- **Linux:** `/SCSTelemetry`
 
 ## Upcoming Changes
 
 There will be some upcoming changes.
-One changes will probably linux support, which will using tcp on windows and linux. So shared memory would be dropped.
 Additional, also to still achieve a better performance, changes to when data will be send will be done. Currently data is partly updated and fully parsed on c# side. That will change. The c# side will not parse the full object each time when the changes going live.

@@ -1,15 +1,14 @@
-// Windows stuff.
-
-// TODO: cleanup file 900 lines are to many and there is much to do in an other
-// file or class
-#define WINVER 0x0500
-#define WIN32_WINNT 0x0500
-
-#include <windows.h>
+// Platform-specific includes
+#ifdef SCS_PLATFORM_WINDOWS
+    #define WINVER 0x0500
+    #define WIN32_WINNT 0x0500
+    #include <windows.h>
+#endif
 
 #include <algorithm>
 #include <cassert>
 #include <cstdarg>
+#include <cstring>
 #include <string>
 // SDK
 #include "amtrucks/scssdk_ats.h"
@@ -67,7 +66,7 @@ scsTelemetryMap_t* telem_ptr;
 
 // const: scs_mmf_name
 // Name/Location of the Shared Memory
-const wchar_t* scs_mmf_name = SCS_PLUGIN_MMF_NAME;
+const shm_name_t scs_mmf_name = SCS_PLUGIN_MMF_NAME;
 
 // ptr: game_log
 // Used to write to the game log
@@ -95,7 +94,7 @@ void log_line(const scs_log_type_t type, const char* const text, ...) {
 
   va_list args;
   va_start(args, text);
-  vsnprintf_s(formated, sizeof formated, _TRUNCATE, text, args);
+  SCS_VSNPRINTF(formated, sizeof formated, text, args);
   formated[sizeof formated - 1] = 0;
   va_end(args);
 
@@ -112,7 +111,7 @@ void log_line(const char* const text, ...) {
 
   va_list args;
   va_start(args, text);
-  vsnprintf_s(formated, sizeof formated, _TRUNCATE, text, args);
+  SCS_VSNPRINTF(formated, sizeof formated, text, args);
   formated[sizeof formated - 1] = 0;
   va_end(args);
 
@@ -1221,10 +1220,24 @@ SCSAPI_VOID scs_telemetry_shutdown() {
 
 // Telemetry api.
 
-// ReSharper disable once CppInconsistentNaming
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason_for_call, LPVOID reseved) {
-  if (reason_for_call == DLL_PROCESS_DETACH) {
-    scs_telemetry_shutdown();
-  }
-  return TRUE;
-}
+// Platform-specific entry points
+#ifdef SCS_PLATFORM_WINDOWS
+    // ReSharper disable once CppInconsistentNaming
+    BOOL APIENTRY DllMain(HMODULE module, DWORD reason_for_call, LPVOID reserved) {
+      if (reason_for_call == DLL_PROCESS_DETACH) {
+        scs_telemetry_shutdown();
+      }
+      return TRUE;
+    }
+#elif defined(SCS_PLATFORM_LINUX)
+    // Linux shared library constructor/destructor
+    __attribute__((constructor)) static void library_init() {
+      // Constructor called when library is loaded
+      // No initialization needed for this plugin
+    }
+
+    __attribute__((destructor)) static void library_fini() {
+      // Destructor called when library is unloaded
+      scs_telemetry_shutdown();
+    }
+#endif

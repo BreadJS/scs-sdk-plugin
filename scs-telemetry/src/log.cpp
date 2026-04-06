@@ -1,13 +1,14 @@
-﻿#if LOGGING
-#include <windows.h>
+#if LOGGING
+#include "platform.hpp"
 #include <string>
 #include <ctime>
 #include "log.hpp"
 #include <fstream>
+#include <sstream>
+#include <iomanip>
 
-// About: How to
-// For what is this class?
-// It is used to log to file.
+// About: How to use
+// This class is used to log to file.
 // Normally it is not activated. That saves resources and
 // the dll size is a lot smaller.
 // To use this the simplest way is to use compiler preamble.
@@ -16,23 +17,11 @@
 // This was implemented to make it hopefully easier to fix bugs.
 
 // Function: Logger
-// used to log to file, usage: add LOGGING to preamble to activate it globally in cpp, but use it with care not full tested yet and not many features 
+// used to log to file, usage: add LOGGING to preamble to activate it globally in cpp, but use it with care not full tested yet and not many features
 // also it rise dll size and may have impacted on the system (loading time, etc.)
 namespace logger {
 
-
     namespace {
-        // Function: s2ws
-        // convert string to wchar (wstring)
-        auto s2ws(const std::string& s) -> std::wstring {
-            const auto slength = static_cast<int>(s.length()) + 1;
-            const auto len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, nullptr, 0);
-            const auto buf = new wchar_t[len];
-            MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, buf, len);
-            std::wstring r(buf);
-            delete[] buf;
-            return r;
-        }
 
         // Function: time_stamp
         // current time to string
@@ -42,40 +31,66 @@ namespace logger {
             return std::strftime(cstr, sizeof(cstr), "%Y%m%d_%H%M%S", std::localtime(&now)) ? cstr : "";
         }
 
+#ifdef SCS_PLATFORM_WINDOWS
+
         // Function: exe_path
-        // get current path
+        // get current path (Windows)
         auto exe_path() -> std::string {
-            char buffer[248];
-            GetModuleFileNameA(nullptr, buffer, 248);
+            char buffer[1024];
+            GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
             const auto pos = std::string(buffer).find_last_of("\\/");
             return std::string(buffer).substr(0, pos);
         }
 
+        // Function: create_directory
+        // create a directory (Windows)
+        bool create_directory(const std::string& path) {
+            return CreateDirectoryA(path.c_str(), nullptr) ||
+                   GetLastError() == ERROR_ALREADY_EXISTS;
+        }
+
+#elif defined(SCS_PLATFORM_LINUX)
+
+        #include <unistd.h>
+        #include <sys/stat.h>
+        #include <sys/types.h>
+        #include <errno.h>
+
+        // Function: exe_path
+        // get current path (Linux)
+        auto exe_path() -> std::string {
+            char buffer[1024];
+            ssize_t count = readlink("/proc/self/exe", buffer, sizeof(buffer));
+            if (count != -1) {
+                buffer[count] = '\0';
+            } else {
+                buffer[0] = '\0';
+            }
+            const auto pos = std::string(buffer).find_last_of("/");
+            return std::string(buffer).substr(0, pos);
+        }
+
+        // Function: create_directory
+        // create a directory (Linux)
+        bool create_directory(const std::string& path) {
+            return mkdir(path.c_str(), 0755) == 0 || errno == EEXIST;
+        }
+
+#endif
+
         // Function: path_to_session_log_file
         // get the path to the current log file
         auto path_to_session_log_file() -> std::string {
-            if (CreateDirectoryA((exe_path() + "/tmp/").c_str(), nullptr) || ERROR_ALREADY_EXISTS == GetLastError()) {
-                if (CreateDirectoryA((exe_path() + "/tmp/log/").c_str(), nullptr) || ERROR_ALREADY_EXISTS ==
-                    GetLastError()) {
-                    static const auto log_dir = exe_path() + "/tmp/log/";
-                    static const std::string log_file_name = "log.txt";
-                    return log_dir + time_stamp() + '_' + log_file_name;
-                }
-                return "";
+            auto base_path = exe_path();
+            auto log_dir = base_path + "/tmp/log/";
+
+            if (create_directory(base_path + "/tmp/") &&
+                create_directory(log_dir)) {
+                static const std::string log_file_name = "log.txt";
+                return log_dir + time_stamp() + '_' + log_file_name;
             }
             return "";
-
         }
-
-        // Function: directory_exists
-        // check if a directory exists
-        auto directory_exists(const LPCTSTR sz_path) -> BOOL {
-            const auto dw_attrib = GetFileAttributes(sz_path);
-
-            return (dw_attrib != INVALID_FILE_ATTRIBUTES &&
-                (dw_attrib & FILE_ATTRIBUTE_DIRECTORY));
-        }
-
 
     }
 
@@ -86,7 +101,7 @@ namespace logger {
     // stream to file
     std::ofstream out = std::ofstream(path);
     // Function: flush
-    // flush the memory 
+    // flush the memory
     void flush() { out.flush(); }
 }
 
