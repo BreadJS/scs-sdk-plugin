@@ -39,7 +39,9 @@ bool SharedMemoryPlatform::close(handle_type handle) {
 
 #elif defined(SCS_PLATFORM_LINUX)
 
+#include <cstdio>
 #include <sys/stat.h>
+#include <string.h>
 
 int SharedMemoryPlatform::get_last_error() {
     return errno;
@@ -50,17 +52,29 @@ SharedMemoryPlatform::handle_type SharedMemoryPlatform::create_or_open(
     // Try to create first
     handle_type handle = shm_open(name, O_CREAT | O_EXCL | O_RDWR, 0666);
 
-    if (handle == -1 && errno == EEXIST) {
-        // Already exists, open it
-        handle = shm_open(name, O_RDWR, 0666);
+    if (handle == -1) {
+        if (errno == EEXIST) {
+            // Already exists, open it
+            handle = shm_open(name, O_RDWR, 0666);
+        } else {
+            // Some other error - log it
+            fprintf(stderr, "SCS Plugin: shm_open failed with error: %s\n", strerror(errno));
+            return -1;
+        }
     }
 
     if (handle != -1) {
         // Set size for newly created shared memory
         struct stat st;
         if (fstat(handle, &st) == 0 && st.st_size == 0) {
-            ftruncate(handle, static_cast<off_t>(size));
+            if (ftruncate(handle, static_cast<off_t>(size)) == -1) {
+                fprintf(stderr, "SCS Plugin: ftruncate failed with error: %s\n", strerror(errno));
+                close(handle);
+                return -1;
+            }
         }
+    } else {
+        fprintf(stderr, "SCS Plugin: Failed to open shared memory (second attempt)\n");
     }
 
     return handle;

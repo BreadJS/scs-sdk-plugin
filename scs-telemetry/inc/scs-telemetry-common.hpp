@@ -15,8 +15,8 @@
 #define ATS                             2
 #define UnknownGame                     0
 
-#define ETS2_PLUGIN_LOGGING_ON				0
-#define ETS2_PLUGIN_LOGGING_SHAREDMEMORY	0
+#define ETS2_PLUGIN_LOGGING_ON				1
+#define ETS2_PLUGIN_LOGGING_SHAREDMEMORY	1
 #define ETS2_PLUGIN_FILENAME_PREFIX SCS_LOG_PATH_PREFIX
 
 #if ETS2_PLUGIN_LOGGING_ON == 1

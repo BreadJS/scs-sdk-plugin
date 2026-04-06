@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.IO.MemoryMappedFiles;
 using SCSSdkClient.Object;
 
@@ -28,6 +29,11 @@ namespace SCSSdkClient {
         ///     memory mapped view accessor
         /// </summary>
         private MemoryMappedViewAccessor _memoryMappedView;
+
+        /// <summary>
+        ///     file stream for sandbox access
+        /// </summary>
+        private FileStream _fileStream;
 
         /// <summary>
         ///     Could we create a memory view on the memory map
@@ -66,12 +72,23 @@ namespace SCSSdkClient {
             try {
                 RawData = new byte[mapSize];
 
-                // Open the map and create a "memory view" at the begin (byte 0)
-                _memoryMappedHandle = MemoryMappedFile.CreateOrOpen(map, mapSize, MemoryMappedFileAccess.ReadWrite);
-                _memoryMappedView = _memoryMappedHandle.CreateViewAccessor(0, mapSize);
+                // Get the actual path (handles sandbox detection)
+                string actualPath = SharedMemoryHelper.GetSharedMemoryPath(map);
 
-                // Mark as a success.
-                Hooked = true;
+                // Check if this is a file path (sandbox case)
+                if (actualPath.StartsWith("/proc/"))
+                {
+                    // Use FileStream for sandbox access
+                    _fileStream = SharedMemoryHelper.OpenSharedMemory(actualPath, mapSize);
+                    Hooked = true;
+                }
+                else
+                {
+                    // Use normal MemoryMappedFile for system-wide shared memory
+                    _memoryMappedHandle = MemoryMappedFile.CreateOrOpen(actualPath, mapSize, MemoryMappedFileAccess.ReadWrite);
+                    _memoryMappedView = _memoryMappedHandle.CreateViewAccessor(0, mapSize);
+                    Hooked = true;
+                }
             } catch (Exception e) {
                 // We were unable to hook onto the map.
                 Hooked = false;
@@ -85,8 +102,13 @@ namespace SCSSdkClient {
         public void Disconnect() {
             Hooked = false;
 
-            _memoryMappedView.Dispose();
-            _memoryMappedHandle.Dispose();
+            _memoryMappedView?.Dispose();
+            _memoryMappedHandle?.Dispose();
+            _fileStream?.Dispose();
+
+            _memoryMappedView = null;
+            _memoryMappedHandle = null;
+            _fileStream = null;
         }
 
         /// <summary>
@@ -105,12 +127,22 @@ namespace SCSSdkClient {
         ///     reread data from memory view
         /// </summary>
         public void Update() {
-            if (!Hooked || _memoryMappedView == null) {
+            if (!Hooked) {
                 return;
             }
 
-            // Re-read data from the view.
-            _memoryMappedView.ReadArray(0, RawData, 0, RawData.Length);
+            // Read from the appropriate source
+            if (_fileStream != null)
+            {
+                // Read from FileStream (sandbox case)
+                _fileStream.Seek(0, SeekOrigin.Begin);
+                _fileStream.Read(RawData, 0, RawData.Length);
+            }
+            else if (_memoryMappedView != null)
+            {
+                // Read from MemoryMappedView (normal case)
+                _memoryMappedView.ReadArray(0, RawData, 0, RawData.Length);
+            }
         }
 
         /// <summary>

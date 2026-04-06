@@ -769,23 +769,23 @@ SCSAPI_VOID telemetry_store_fplacement(const scs_string_t name,
 
 SCSAPI_RESULT scs_telemetry_init(
     const scs_u32_t version, const scs_telemetry_init_params_t* const params) {
-  // We currently support only two version.
-  // TODO test this first test seems to work
+  // Support any 1.x version - use v101 as it's backwards compatible
   const scs_telemetry_init_params_v100_t* version_params;
-  if (version == SCS_TELEMETRY_VERSION_1_00) {
-    version_params =
-        static_cast<const scs_telemetry_init_params_v100_t*>(params);
-    // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
-  } else if (version == SCS_TELEMETRY_VERSION_1_01) {
+  if ((version & 0xFFFF0000) == SCS_TELEMETRY_VERSION_1_00) {
+    // Any 1.x version - use v101 structure as it's compatible
     version_params =
         static_cast<const scs_telemetry_init_params_v101_t*>(params);
     // NOLINT(cppcoreguidelines-pro-type-static-cast-downcast)
   } else {
+    log_line("Unsupported version: 0x%x", version);
     return SCS_RESULT_unsupported;
   }
 
   game_log = version_params->common.log;
+  log_line("Init called with version: 0x%x", version);
+
   if (version_params == nullptr) {
+    log_line("version_params is NULL");
     return SCS_RESULT_generic_error;
   }
 #if LOGGING
@@ -793,8 +793,18 @@ SCSAPI_RESULT scs_telemetry_init(
   logger::out << "start logging" << '\n';
 #endif
 
+  /*** HANDLE REINITIALIZATION ***/
+  if (telem_mem != nullptr) {
+    log_line("Already initialized, cleaning up first");
+    telem_mem->Close();
+    delete telem_mem;
+    telem_mem = nullptr;
+  }
+
   /*** ACQUIRE SHARED MEMORY BUFFER ***/
+  log_line("Creating shared memory");
   telem_mem = new SharedMemory(scs_mmf_name, SCS_PLUGIN_MMF_SIZE);
+  log_line("Shared memory created");
 
   if (telem_mem == nullptr) {
     return SCS_RESULT_generic_error;
@@ -1198,24 +1208,30 @@ SCSAPI_VOID scs_telemetry_shutdown() {
 #if LOGGING
   logger::flush();
 #endif
-  // Close MemoryMap
-  telem_ptr->sdkActive = false;
-  telem_ptr->scs_values.game = 0;
-  telem_ptr->scs_values.telemetry_plugin_revision = 0;
-  telem_ptr->scs_values.telemetry_version_game_major = 0;
-  telem_ptr->scs_values.telemetry_version_game_minor = 0;
-  telem_ptr->scs_values.version_major = 0;
-  telem_ptr->scs_values.version_minor = 0;
+  // Close MemoryMap and clean up
+  if (telem_ptr != nullptr) {
+    telem_ptr->sdkActive = false;
+    telem_ptr->scs_values.game = 0;
+    telem_ptr->scs_values.telemetry_plugin_revision = 0;
+    telem_ptr->scs_values.telemetry_version_game_major = 0;
+    telem_ptr->scs_values.telemetry_version_game_minor = 0;
+    telem_ptr->scs_values.version_major = 0;
+    telem_ptr->scs_values.version_minor = 0;
 
-  telem_ptr->time = 0;
-  telem_ptr->simulatedTime = 0;
-  telem_ptr->renderTime = 0;
-  telem_ptr->common_ui.time_abs = 0;
-  telem_ptr->common_f.scale = 0;
+    telem_ptr->time = 0;
+    telem_ptr->simulatedTime = 0;
+    telem_ptr->renderTime = 0;
+    telem_ptr->common_ui.time_abs = 0;
+    telem_ptr->common_f.scale = 0;
+  }
 
   if (telem_mem != nullptr) {
     telem_mem->Close();
+    delete telem_mem;
+    telem_mem = nullptr;
   }
+
+  telem_ptr = nullptr;
 }
 
 // Telemetry api.

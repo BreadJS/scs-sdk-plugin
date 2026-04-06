@@ -65,8 +65,6 @@ elseif(UNIX AND NOT APPLE)
         OUTPUT_NAME "scs-telemetry"
         SUFFIX ".so"
         PREFIX ""
-        VERSION ${PROJECT_VERSION}
-        SOVERSION 1
     )
 
     # Create symbol version script for exports
